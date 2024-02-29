@@ -32,3 +32,16 @@ def get_bulk_tanimoto_distance(fp1, list_fp):
 def get_bulk_tanimoto_similarities(fp1, list_fp):
     #the first parameter of this function is a bitVect and the second parameter is a list of bitVect
     return DataStructs.cDataStructs.BulkTanimotoSimilarity(fp1, list_fp)
+
+
+def compute_morgan_fps_customized_cols(smiles_array, rm_columns = ['morgan_274', 'morgan_644', 'morgan_1108', 'morgan_1643']):
+    mols = get_mols_from_array(smiles_array)
+    
+    fps = [AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=2048) for mol in mols]  # Calculate Morgan fingerprints for each molecule
+    fp_array = [np.array(fp) for fp in fps]   # Convert fingerprints to numpy array
+    column_names = ['morgan_' + str(i) for i in range(len(fp_array[0]))]
+
+    data = pd.DataFrame(fp_array, columns = column_names)
+    #prepocessing by removing removed columns
+    data.drop(rm_columns, axis = 1, inplace=True)
+    return data

@@ -4,6 +4,7 @@ from rdkit.Chem import AllChem
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score
 
 import AD_utils
 
@@ -61,7 +62,7 @@ class AD:
 
 
     #compare between test vector and train
-    def get_similarity(self, test, return_type = 'max'):
+    def get_similarity(self, test, return_type = 'max', k=0):
         return_types = ['min' , 'max']
 
         if (return_type not in return_types):
@@ -79,6 +80,21 @@ class AD:
 
         answer_array = []
 
+        # return the array of the average of nearest k similarities of each compound to the training set
+        if k > 0:
+            for i in testbitVect:
+                similarities = AD_utils.get_bulk_tanimoto_similarities(i, self.base)
+                similarities = sorted(similarities, reverse=True) #arrange similarities from highest to lowest
+                summ = 0
+                for i in range(k):
+                    summ = summ + similarities[i]
+                avg = summ / k
+                answer_array.append(avg)
+            
+            return answer_array #array containing average of top 5 similar compounds to the molecule
+
+
+
         for i in testbitVect:
             similarities = AD_utils.get_bulk_tanimoto_distance(i, self.base)
             answer_array.append(max(similarities))
@@ -86,7 +102,7 @@ class AD:
         return answer_array
 
     #plotting distance against compound ID
-    def plot_distance(self, test, threshold = None, input_info = None):
+    def plot_distance(self, test, threshold = None, input_info = None, k=0):
         if (not isinstance(threshold, (float, int)) and not threshold == None):
             raise TypeError('threshold must be of type integer')
         
@@ -95,7 +111,7 @@ class AD:
 
         #additional info is a type smile
         #converting it to find its distance.
-        input_distance = list(map(dist, self.get_similarity(input_info)))
+        input_distance = list(map(dist, self.get_similarity(input_info, k=k)))
 
         #generating distance from calculated similarity
         distance = list(map(dist, self.get_similarity(test)))
@@ -126,4 +142,56 @@ class AD:
 
         return fig, ax, isWithin
 
+    
+    def accuracy_v_coverage(self, test, y_true, model, k = 5, percentage =True):
+        #plotting of accuracy against coverage
+        #with varying threshold of the applicability domain, the accuracy would be calculated
+
+        #converting to np array
+        y_true = np.array(y_true)
+
+        accuracy = []
+        percentage = []
+        threshold = map(lambda x: x/100.0, range(0, 105,5 ))
+        total_length = len(test)
+
+        test_distances = 1 - np.array(self.get_similarity(test, k=k))
+        test = np.array(test)
+
+        for i in threshold:
+            filter_map = test_distances <= i
+
+            #filter both test and y_true
+            filtered_test = list(test[filter_map])
+            filtered_true_pred = y_true[filter_map]
+            
+            filtered_length = len(filtered_test)
+            
+            if filtered_length == 0 :
+                accuracy.append(1)
+                percentage.append(0)
+            else:     
+                fps = AD_utils.compute_morgan_fps_customized_cols(filtered_test)
+                filtered_test_pred = model.predict(fps)
+
+                accuracy.append(round(accuracy_score(filtered_true_pred, filtered_test_pred),2))
+                percentage.append(round(filtered_length / total_length, 2))
+            
+            print('accuracy: ', accuracy[-1], ', ', 'threshold: ', i, ', ', 'percentage: ', percentage[-1])
+            
+        fig, ax = plt.subplots()
+
+        if percentage == True:
+            ax.set_title('Accuracy against percentage')
+            ax.set_xlabel('Percentage %')
+            
+            x_value = percentage
+        else:
+            ax.set_title('Accuracy against threshold')
+            ax.set_xlabel('threshold')
+            x_value = list(threshold)
+            pass
         
+        ax.set_ylabel('Accuracy')
+        sns.lineplot(x=x_value, y=accuracy, ax=ax)
+        return accuracy, threshold
