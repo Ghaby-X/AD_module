@@ -102,7 +102,7 @@ class AD:
         return answer_array
 
     #plotting distance against compound ID
-    def plot_distance(self, test, threshold = None, input_info = None, k=0):
+    def plot_distance(self, test, threshold = 0.5, input_info = None, k=0):
         if (not isinstance(threshold, (float, int)) and not threshold == None):
             raise TypeError('threshold must be of type integer')
         
@@ -111,17 +111,21 @@ class AD:
 
         #additional info is a type smile
         #converting it to find its distance.
-        input_distance = list(map(dist, self.get_similarity(input_info, k=k)))
+        
+        if input_info:
+            input_distance = list(map(dist, self.get_similarity(input_info, k=k)))
+        else:
+            input_distance = None
 
         #generating distance from calculated similarity
-        distance = list(map(dist, self.get_similarity(test)))
+        distance = list(map(dist, self.get_similarity(test, k=k)))
         fig, ax = plt.subplots()
 
         #plot of distance
         sns.scatterplot(distance, ax=ax, color='orange', alpha = 0.5, label='test-data')
 
         #input info is any additional points that should be plotted on the base distribution
-        if input_info:
+        if (isinstance(input_info, str)):
             sns.scatterplot(x = [300], y=[input_distance[0]], color='blue', ax=ax, label='input')
         
         
@@ -129,7 +133,8 @@ class AD:
         if(threshold):
             plt.axhline(y=threshold, color='r', linestyle='-', linewidth=2, label = 'threshold')
 
-            #boolean to show which distances are in the threshold
+        #boolean to show which distances are in the threshold
+        if (input_distance):
             isWithin = list(map(lambda p: p < threshold, input_distance))
         else:
             isWithin = None
@@ -151,8 +156,8 @@ class AD:
         y_true = np.array(y_true)
 
         accuracy = []
-        percentage = []
-        threshold = map(lambda x: x/100.0, range(0, 105,5 ))
+        percentages = []
+        threshold = list(map(lambda p: p/100.0, range(0, 105,5 )))
         total_length = len(test)
 
         test_distances = 1 - np.array(self.get_similarity(test, k=k))
@@ -169,15 +174,15 @@ class AD:
             
             if filtered_length == 0 :
                 accuracy.append(1)
-                percentage.append(0)
+                percentages.append(0)
             else:     
                 fps = AD_utils.compute_morgan_fps_customized_cols(filtered_test)
                 filtered_test_pred = model.predict(fps)
 
                 accuracy.append(round(accuracy_score(filtered_true_pred, filtered_test_pred),2))
-                percentage.append(round(filtered_length / total_length, 2))
+                percentages.append(round(filtered_length / total_length, 2))
             
-            print('accuracy: ', accuracy[-1], ', ', 'threshold: ', i, ', ', 'percentage: ', percentage[-1])
+            #print('accuracy: ', accuracy[-1], ', ', 'threshold: ', i, ', ', 'percentage: ', percentages[-1])
             
         fig, ax = plt.subplots()
 
@@ -185,11 +190,11 @@ class AD:
             ax.set_title('Accuracy against percentage')
             ax.set_xlabel('Percentage %')
             
-            x_value = percentage
+            x_value = percentages
         else:
             ax.set_title('Accuracy against threshold')
             ax.set_xlabel('threshold')
-            x_value = list(threshold)
+            x_value = threshold
             pass
         
         ax.set_ylabel('Accuracy')
